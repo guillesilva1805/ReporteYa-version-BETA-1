@@ -1,0 +1,33 @@
+package com.example.reporteya.ui.reporte.paso03_ubicacion
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import com.example.reporteya.ui.reporte.common.respuestas_reporte
+
+@Composable
+fun Paso03Ubicacion(onValidity: (Boolean) -> Unit) {
+    val estado = respuestas_reporte.estado
+    var ubicacion by remember(estado.value.ubicacion) { mutableStateOf(estado.value.ubicacion.orEmpty()) }
+    Column {
+        OutlinedTextField(
+            value = ubicacion,
+            onValueChange = {
+                ubicacion = it
+                respuestas_reporte.actualizar { r -> r.copy(ubicacion = it) }
+                onValidity(it.isNotBlank())
+            },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Ubicación específica") }
+        )
+    }
+}
+
+
