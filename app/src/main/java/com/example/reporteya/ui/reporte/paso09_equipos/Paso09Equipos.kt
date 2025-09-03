@@ -10,12 +10,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.collectAsState
 import com.example.reporteya.ui.reporte.common.respuestas_reporte
 
 @Composable
 fun Paso09Equipos(onValidity: (Boolean) -> Unit) {
-    val estado = respuestas_reporte.estado
-    var equipos by remember(estado.value.equipos) { mutableStateOf(estado.value.equipos.orEmpty()) }
+    val estado by respuestas_reporte.estado.collectAsState()
+    var equipos by remember(estado.equipos) { mutableStateOf(estado.equipos.orEmpty()) }
     Column {
         OutlinedTextField(
             value = equipos,

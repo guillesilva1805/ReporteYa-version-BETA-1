@@ -19,7 +19,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.reporteya.ui.reporte.common.respuestas_reporte
 import com.example.reporteya.ui.reporte.common.FileCache
+import com.example.reporteya.services.FrenteService
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.collectAsState
 import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
@@ -27,95 +32,75 @@ import java.net.URL
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Paso02Frente(onValidity: (Boolean) -> Unit) {
-    val estado = respuestas_reporte.estado
-    var opciones by remember { mutableStateOf(listOf<String>()) }
-    var cargando by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val estado by respuestas_reporte.estado.collectAsState()
+    val frentes by FrenteService.frentes.collectAsState()
+    val cargando by FrenteService.loading.collectAsState()
+    val error by FrenteService.error.collectAsState()
     var expanded by remember { mutableStateOf(false) }
-    var seleccionado by remember(estado.value.frente) { mutableStateOf(estado.value.frente.orEmpty()) }
+    var seleccionado by remember(estado.frente) { mutableStateOf(estado.frente.orEmpty()) }
 
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
-        cargando = true; error = null
-        val url = "https://uppdkjfjxtjnukftgwhz.supabase.co/rest/v1/frentes?select=*"
-        FileCache.read(context, url)?.let { cached ->
-            runCatching { JSONArray(cached) }.onSuccess { arr ->
-                opciones = (0 until arr.length()).map { i ->
-                    val obj = arr.getJSONObject(i); if (obj.has("nombre")) obj.getString("nombre") else obj.optString("name", obj.toString())
-                }
-            }
-        }
-        val r = fetchLista(url)
-        when (r) {
-            is Resultado.Ok -> opciones = r.datos
-            is Resultado.Error -> error = r.mensaje
-        }
-        runCatching {
-            val conn = (URL(url).openConnection() as HttpURLConnection).apply { requestMethod = "GET" }
-            if (conn.responseCode in 200..299) {
-                val body = conn.inputStream.bufferedReader().readText()
-                FileCache.save(context, url, body)
-            }
-            conn.disconnect()
-        }
-        cargando = false
-        onValidity(seleccionado.isNotBlank() && error == null && !cargando)
+        FrenteService.cargarFrentes(context)
+        onValidity(seleccionado.isNotBlank())
     }
 
     Column {
-        when {
-            cargando -> CircularProgressIndicator()
-            error != null -> Text("Error: ${'$'}error")
-            else -> {
-                ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
-                    TextField(
-                        readOnly = true,
-                        value = seleccionado,
-                        onValueChange = {},
-                        label = { Text("Frente de trabajo") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        opciones.forEach { item ->
-                            DropdownMenuItem(text = { Text(item) }, onClick = {
-                                seleccionado = item
-                                respuestas_reporte.actualizar { r -> r.copy(frente = item) }
+        if (cargando) {
+            Text("Cargando frentes de trabajo...")
+            CircularProgressIndicator()
+        } else {
+            // SIEMPRE mostrar el dropdown, nunca error
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                TextField(
+                    readOnly = true,
+                    value = seleccionado,
+                    onValueChange = {},
+                    label = { Text("Frente de trabajo") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier.fillMaxWidth().menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    frentes.forEach { f ->
+                        DropdownMenuItem(
+                            text = { Text(f.nombre) },
+                            onClick = {
+                                seleccionado = f.nombre
+                                respuestas_reporte.actualizar { r -> r.copy(frente = f.nombre) }
                                 expanded = false
                                 onValidity(true)
-                            })
-                        }
+                            }
+                        )
                     }
                 }
+            }
+
+            // Botón Recargar: siempre visible si hay datos; si hubo error y no hay datos, también mostrar
+            TextButton(
+                onClick = {
+                    scope.launch { FrenteService.cargarFrentes(context, forzarRecarga = true) }
+                },
+                enabled = !cargando
+            ) {
+                Text(if (cargando) "Recargando..." else "Recargar")
+            }
+
+            // Mensaje de error simple si no hay datos
+            if (error != null && frentes.isEmpty()) {
+                Text("No se pudieron cargar los frentes")
             }
         }
     }
 }
 
-private sealed class Resultado { data class Ok(val datos: List<String>) : Resultado(); data class Error(val mensaje: String) : Resultado() }
-
-private fun fetchLista(urlStr: String): Resultado {
-    return try {
-        val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"; connectTimeout = 15000; readTimeout = 20000
-        }
-        val ok = conn.responseCode in 200..299
-        val body = (if (ok) conn.inputStream else conn.errorStream).bufferedReader().readText()
-        conn.disconnect()
-        if (!ok) return Resultado.Error("HTTP ${'$'}{conn.responseCode}")
-        val arr = JSONArray(body)
-        val out = mutableListOf<String>()
-        for (i in 0 until arr.length()) {
-            val obj = arr.getJSONObject(i)
-            val label = when {
-                obj.has("nombre") -> obj.getString("nombre")
-                obj.has("name") -> obj.getString("name")
-                else -> obj.toString()
-            }
-            out.add(label)
-        }
-        Resultado.Ok(out)
-    } catch (t: Throwable) { Resultado.Error(t.message ?: "Error") }
-}
+// Resultado y fetch locales eliminados: ahora se usa FrenteService
 
 

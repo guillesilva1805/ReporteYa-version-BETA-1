@@ -1,8 +1,7 @@
+@file:Suppress("SpellCheckingInspection")
+
 package com.example.reporteya.ui.reporte
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,20 +11,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
 import com.example.reporteya.ui.reporte.common.respuestas_reporte
 import com.example.reporteya.ui.reporte.paso01_supervisor.Paso01Supervisor
 import com.example.reporteya.ui.reporte.paso02_frente.Paso02Frente
@@ -44,10 +43,11 @@ import com.example.reporteya.ui.reporte.paso14_revision_enviar.Paso14RevisionEnv
 
 @Composable
 fun ReporteFlowScreen(onFinish: () -> Unit, onLogout: () -> Unit) {
-    var paso by remember { mutableStateOf(1) }
+    var paso by remember { mutableIntStateOf(1) }
     var valido by remember { mutableStateOf(false) }
     val progreso = paso / 14f
     val respuestas by respuestas_reporte.estado.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     fun isStepValid(step: Int): Boolean {
         return when (step) {
@@ -60,12 +60,10 @@ fun ReporteFlowScreen(onFinish: () -> Unit, onLogout: () -> Unit) {
             7 -> {
                 val inicio = respuestas.horaInicio
                 val fin = respuestas.horaFin
-                try {
-                    if (inicio.isNullOrBlank() || fin.isNullOrBlank()) return false
-                    val i = inicio.split(":").let { it[0].toInt() * 60 + it[1].toInt() }
-                    val f = fin.split(":").let { it[0].toInt() * 60 + it[1].toInt() }
-                    f > i
-                } catch (_: Exception) { false }
+                if (inicio.isNullOrBlank() || fin.isNullOrBlank()) return false
+                val i = parseMinutesAmPm(inicio) ?: return false
+                val f = parseMinutesAmPm(fin) ?: return false
+                f > i
             }
             8 -> respuestas.media.isNotEmpty()
             9 -> !respuestas.equipos.isNullOrBlank()
@@ -142,9 +140,8 @@ fun ReporteFlowScreen(onFinish: () -> Unit, onLogout: () -> Unit) {
             confirmButton = {
                 TextButton(onClick = {
                     // Borrar sesión y volver al login
-                    val ctx = androidx.compose.ui.platform.LocalContext.current
-                    val prefs = ctx.getSharedPreferences("session", android.content.Context.MODE_PRIVATE)
-                    prefs.edit().remove("dniEmpleado").apply()
+                    val prefs = context.getSharedPreferences("session", android.content.Context.MODE_PRIVATE)
+                    prefs.edit { remove("dniEmpleado") }
                     showLogoutConfirm = false
                     onLogout()
                 }) { Text("Sí") }
@@ -154,6 +151,20 @@ fun ReporteFlowScreen(onFinish: () -> Unit, onLogout: () -> Unit) {
             text = { Text("Se cerrará tu sesión") }
         )
     }
+}
+
+private fun parseMinutesAmPm(value: String): Int? {
+    return try {
+        val parts = value.trim().split(" ")
+        val hm = parts[0].split(":")
+        val h = hm[0].toInt()
+        val m = hm[1].toInt()
+        when (parts.getOrNull(1)?.uppercase()) {
+            "AM" -> if (h == 12) 0 * 60 + m else h * 60 + m
+            "PM" -> if (h == 12) 12 * 60 + m else (h + 12) * 60 + m
+            else -> h * 60 + m
+        }
+    } catch (_: Exception) { null }
 }
 
 

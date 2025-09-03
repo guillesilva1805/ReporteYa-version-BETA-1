@@ -20,7 +20,7 @@ object FileCache {
 
     private fun safeName(key: String): String {
         val sanitized = key.replace(Regex("[^a-zA-Z0-9_]+"), "_")
-        return "cache_${'$'}sanitized.json"
+        return "cache_${sanitized}.json"
     }
 }
 

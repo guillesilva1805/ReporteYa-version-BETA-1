@@ -20,28 +20,69 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.reporteya.ui.reporte.common.respuestas_reporte
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun Paso08Fotos(onValidity: (Boolean) -> Unit) {
     val estado by respuestas_reporte.estado.collectAsState()
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { result ->
+    val context = LocalContext.current
+
+    val photoPickerAvailable = ActivityResultContracts.PickVisualMedia.isPhotoPickerAvailable(context)
+
+    val launcherPhotoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { result ->
         respuestas_reporte.actualizar { r -> r.copy(media = result) }
-        onValidity(result.isNotEmpty())
     }
+
+    val launcherOpenMultiple = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        // Intentar persistir permisos de lectura
+        uris.forEach { uri ->
+            try { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+        }
+        respuestas_reporte.actualizar { r -> r.copy(media = uris) }
+    }
+
+    LaunchedEffect(estado.media) { onValidity(estado.media.isNotEmpty()) }
     Column {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }) { Text("Seleccionar fotos/vídeos") }
-            if (estado.media.isNotEmpty()) TextButton(onClick = { respuestas_reporte.actualizar { r -> r.copy(media = emptyList()) }; onValidity(false) }) { Text("Borrar todo") }
+            Button(onClick = {
+                if (photoPickerAvailable) {
+                    launcherPhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                } else {
+                    launcherOpenMultiple.launch(arrayOf("image/*", "video/*"))
+                }
+            }) { Text("Seleccionar fotos/vídeos") }
+            if (estado.media.isNotEmpty()) TextButton(onClick = { respuestas_reporte.actualizar { r -> r.copy(media = emptyList()) }; onValidity(false) }) { Text("Borrar todo (${estado.media.size})") }
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = androidx.compose.ui.Modifier.height(140.dp)) {
             items(estado.media) { uri ->
-                Column {
-                    AsyncImage(model = uri, contentDescription = null)
-                    TextButton(onClick = {
+                Box(modifier = Modifier.size(120.dp)) {
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = null,
+                        modifier = Modifier.size(120.dp).clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    IconButton(onClick = {
                         val nueva = estado.media.filterNot { it == uri }
                         respuestas_reporte.actualizar { r -> r.copy(media = nueva) }
                         onValidity(nueva.isNotEmpty())
-                    }) { Text("Quitar") }
+                    }, modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd)) {
+                        Icon(Icons.Default.Close, contentDescription = "Quitar")
+                    }
                 }
             }
         }

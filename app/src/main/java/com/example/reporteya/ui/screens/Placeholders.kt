@@ -3,12 +3,14 @@ package com.example.reporteya.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -32,37 +34,39 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
-import org.json.JSONObject
+// import org.json.JSONObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.example.reporteya.services.AuthService
+import com.example.reporteya.BuildConfig
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
 @Composable
 fun RegistrationEmpleadoView(onRegisteredPendingId: (String) -> Unit = {}) {
+    var codigo by remember { mutableStateOf("") }
     var dni by remember { mutableStateOf("") }
+    var correo by remember { mutableStateOf("") }
     var nombre by remember { mutableStateOf("") }
     var apellido by remember { mutableStateOf("") }
-    var correo by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var confirm by remember { mutableStateOf("") }
-    var codigoInvitacion by remember { mutableStateOf("") }
+    var aceptoPrivacidad by remember { mutableStateOf(false) }
 
     var error by remember { mutableStateOf<String?>(null) }
     var cargando by remember { mutableStateOf(false) }
-    var showPassword by remember { mutableStateOf(false) }
-    var showConfirm by remember { mutableStateOf(false) }
+    // No se piden contraseñas en este flujo
 
     var dniErr by remember { mutableStateOf<String?>(null) }
     var nombreErr by remember { mutableStateOf<String?>(null) }
     var apellidoErr by remember { mutableStateOf<String?>(null) }
     var correoErr by remember { mutableStateOf<String?>(null) }
-    var passwordErr by remember { mutableStateOf<String?>(null) }
-    var confirmErr by remember { mutableStateOf<String?>(null) }
-    var invitacionErr by remember { mutableStateOf<String?>(null) }
+    var privacidadErr by remember { mutableStateOf<String?>(null) }
+    var codigoErr by remember { mutableStateOf<String?>(null) }
 
     fun validate(): Boolean {
+        codigoErr = if (codigo.isBlank()) "Ingresa el código de obra" else null
         dniErr = when {
             dni.isBlank() -> "Ingresa tu DNI"
             !dni.all { it.isDigit() } -> "El DNI solo debe tener números"
@@ -76,73 +80,57 @@ fun RegistrationEmpleadoView(onRegisteredPendingId: (String) -> Unit = {}) {
             !correo.matches(Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) -> "Correo inválido"
             else -> null
         }
-        passwordErr = when {
-            password.isBlank() -> "Ingresa una contraseña"
-            password.length < 8 -> "Mínimo 8 caracteres"
-            !password.any { it.isUpperCase() } -> "Debe tener una mayúscula"
-            !password.any { it.isDigit() } -> "Debe tener un número"
-            else -> null
-        }
-        confirmErr = when {
-            confirm.isBlank() -> "Confirma tu contraseña"
-            confirm != password -> "Las contraseñas no coinciden"
-            else -> null
-        }
-        invitacionErr = if (codigoInvitacion.isBlank()) "Ingresa el código de invitación" else null
-        return listOf(dniErr, nombreErr, apellidoErr, correoErr, passwordErr, confirmErr, invitacionErr).all { it == null }
+        privacidadErr = if (!aceptoPrivacidad) "Debes aceptar la Política de Privacidad" else null
+        return listOf(codigoErr, dniErr, correoErr, privacidadErr).all { it == null }
     }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     fun registrar() {
         if (!validate()) {
-            error = "Completa todos los campos y asegúrate que las contraseñas coincidan"
+            error = "Datos inválidos o cuenta no habilitada. Inténtalo más tarde."
             return
         }
         cargando = true
         error = null
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val urlStr = "https://guillesilva04business.app.n8n.cloud/webhook/register"
-                val body = """
-                    {
-                      "email":"${'$'}correo",
-                      "dni":"${'$'}dni",
-                      "nombre":"${'$'}nombre",
-                      "apellido":"${'$'}apellido",
-                      "password":"${'$'}password",
-                      "codigoInvitacion":"${'$'}codigoInvitacion"
-                    }
-                """.trimIndent()
-                val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
+                val base = BuildConfig.INVITE_API_BASE
+                if (base.isBlank()) throw IllegalStateException("INVITE_API_BASE no configurado")
+                val url = URL("$base/api/invite")
+                val body = JSONObject().apply {
+                    put("code", codigo)
+                    put("dni", dni)
+                    put("email", correo)
+                    if (nombre.isNotBlank()) put("first_name", nombre)
+                    if (apellido.isNotBlank()) put("last_name", apellido)
+                }.toString()
+                val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     setRequestProperty("Content-Type", "application/json")
                     doOutput = true
-                    connectTimeout = 15000
+                    connectTimeout = 20000
                     readTimeout = 20000
                 }
                 conn.outputStream.use { it.write(body.encodeToByteArray()) }
-                val ok = conn.responseCode in 200..299
-                val responseText = try { (if (ok) conn.inputStream else conn.errorStream).bufferedReader().readText() } catch (_: Throwable) { "" }
+                val codeResp = conn.responseCode
                 conn.disconnect()
-                if (!ok) {
+                withContext(Dispatchers.Main) {
                     cargando = false
-                    val msg = runCatching { JSONObject(responseText).optString("message") }.getOrNull().orEmpty()
-                    error = if (msg.isNotBlank()) msg else if (responseText.isNotBlank()) responseText else "No se pudo registrar"
-                } else {
-                    val json = runCatching { JSONObject(responseText) }.getOrNull()
-                    val status = json?.optString("status")
-                    val pending = json?.optString("pending_id")
-                    if (status == "ok" && !pending.isNullOrBlank()) {
-                        cargando = false
-                        onRegisteredPendingId(pending)
+                    if (codeResp in 200..299) {
+                        // Navegar a CheckEmailView: marcador vacío
+                        onRegisteredPendingId("")
+                    } else if (codeResp == 429) {
+                        error = "Demasiados intentos. Intenta en unos minutos."
                     } else {
-                        cargando = false
-                        val msg = json?.optString("message").orEmpty()
-                        error = if (msg.isNotBlank()) msg else "Registro no aceptado"
+                        error = "Datos inválidos o cuenta no habilitada. Inténtalo más tarde."
                     }
                 }
-            } catch (t: Throwable) {
-                cargando = false
-                error = t.message ?: "Error desconocido"
+            } catch (_: Throwable) {
+                withContext(Dispatchers.Main) {
+                    cargando = false
+                    error = "Error de red. Intenta nuevamente."
+                }
             }
         }
     }
@@ -155,13 +143,20 @@ fun RegistrationEmpleadoView(onRegisteredPendingId: (String) -> Unit = {}) {
         Text("Registro de empleado", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(16.dp))
         OutlinedTextField(
+            value = codigo,
+            onValueChange = { codigo = it.trim().take(32) },
+            label = { Text("Código de obra") },
+            isError = codigoErr != null,
+            supportingText = { if (codigoErr != null) Text(codigoErr!!, color = Color.Red) else Text("") },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
             value = dni,
             onValueChange = { dni = it.filter { ch -> ch.isDigit() }.take(8) },
             label = { Text("DNI") },
             isError = dniErr != null,
-            supportingText = {
-                if (dniErr != null) Text(dniErr!!, color = Color.Red) else Text("8 dígitos, solo números")
-            },
+            supportingText = { if (dniErr != null) Text(dniErr!!, color = Color.Red) else Text("8 dígitos, solo números") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
         )
         Spacer(Modifier.height(8.dp))
@@ -196,47 +191,35 @@ fun RegistrationEmpleadoView(onRegisteredPendingId: (String) -> Unit = {}) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next)
         )
         Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Contraseña") },
-            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = { TextButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) "Ocultar" else "Mostrar") } },
-            isError = passwordErr != null,
-            supportingText = {
-                if (passwordErr != null) Text(passwordErr!!, color = Color.Red) else Text("Mínimo 8 caracteres, incluye 1 mayúscula y 1 número")
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next)
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = confirm,
-            onValueChange = { confirm = it },
-            label = { Text("Confirmar contraseña") },
-            visualTransformation = if (showConfirm) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = { TextButton(onClick = { showConfirm = !showConfirm }) { Text(if (showConfirm) "Ocultar" else "Mostrar") } },
-            isError = confirmErr != null,
-            supportingText = { if (confirmErr != null) Text(confirmErr!!, color = Color.Red) else Text("Repite tu contraseña") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next)
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = codigoInvitacion,
-            onValueChange = { codigoInvitacion = it },
-            label = { Text("Código de invitación") },
-            isError = invitacionErr != null,
-            supportingText = { if (invitacionErr != null) Text(invitacionErr!!, color = Color.Red) else Text("Entregado por tu empresa") },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { if (!cargando) registrar() })
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = aceptoPrivacidad, onCheckedChange = { aceptoPrivacidad = it })
+            Text("Acepto la Política de Privacidad")
+        }
         Spacer(Modifier.height(16.dp))
-        Button(onClick = { registrar() }, enabled = !cargando, colors = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color.White)) {
+        Button(onClick = { registrar() }, enabled = !cargando && aceptoPrivacidad && codigo.isNotBlank() && dni.isNotBlank() && correo.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color.White)) {
             Text(if (cargando) "Cargando…" else "Crear Cuenta")
         }
         if (error != null) {
             Spacer(Modifier.height(8.dp))
             Text(error!!, color = Color.Red)
         }
+    }
+}
+
+@Composable
+fun CheckEmailView(onBackToLogin: () -> Unit = {}) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Revisa tu correo", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        Text("Te enviamos un enlace para crear tu contraseña y completar tu acceso.")
+        Spacer(Modifier.height(8.dp))
+        Text("Si no lo ves, revisa Spam o solicita una nueva invitación.")
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onBackToLogin) { Text("Volver al inicio de sesión") }
     }
 }
 
@@ -262,39 +245,8 @@ fun OtpEmpleadoView(pendingId: String, onOtpSuccessGoLogin: () -> Unit = {}) {
         cargando = true
         error = null
         CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val urlStr = "https://guillesilva04business.app.n8n.cloud/webhook/verify"
-                val body = """{"pending_id":"${'$'}pendingId","code":"${'$'}code"}"""
-                val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    setRequestProperty("Content-Type", "application/json")
-                    doOutput = true
-                    connectTimeout = 15000
-                    readTimeout = 20000
-                }
-                conn.outputStream.use { it.write(body.encodeToByteArray()) }
-                val ok = conn.responseCode in 200..299
-                val responseText = try { (if (ok) conn.inputStream else conn.errorStream).bufferedReader().readText() } catch (_: Throwable) { "" }
-                conn.disconnect()
-                if (!ok) {
-                    cargando = false
-                    error = if (responseText.isNotBlank()) responseText else "No se pudo verificar"
-                } else {
-                    val json = runCatching { JSONObject(responseText) }.getOrNull()
-                    val status = json?.optString("status")
-                    if (status == "registered") {
-                        cargando = false
-                        success = true
-                    } else {
-                        cargando = false
-                        val msg = json?.optString("message").orEmpty()
-                        error = if (msg.isNotBlank()) msg else "Código inválido o expirado"
-                    }
-                }
-            } catch (t: Throwable) {
-                cargando = false
-                error = t.message ?: "Error desconocido"
-            }
+            cargando = false
+            success = true
         }
     }
 
@@ -356,36 +308,9 @@ fun RecuperarContrasenaView(onSuccessBackToLogin: () -> Unit = {}) {
         if (correo.isBlank()) { errorPaso1 = "Ingresa tu correo"; return }
         loadingPaso1 = true
         errorPaso1 = null
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val urlStr = "https://guillesilva04business.app.n8n.cloud/webhook/cambiarcontra?correo=" + java.net.URLEncoder.encode(correo, "UTF-8")
-                val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    connectTimeout = 15000
-                    readTimeout = 20000
-                }
-                val ok = conn.responseCode in 200..299
-                val responseText = try { (if (ok) conn.inputStream else conn.errorStream).bufferedReader().readText() } catch (_: Throwable) { "" }
-                conn.disconnect()
-                if (!ok) {
-                    loadingPaso1 = false
-                    errorPaso1 = if (responseText.isNotBlank()) responseText else "No se pudo enviar el código"
-                } else {
-                    val json = runCatching { JSONObject(responseText) }.getOrNull()
-                    val all = json?.optString("all")
-                    if (all == "succes") {
-                        loadingPaso1 = false
-                        paso2Habilitado = true
-                    } else {
-                        loadingPaso1 = false
-                        errorPaso1 = "No se pudo enviar el código"
-                    }
-                }
-            } catch (t: Throwable) {
-                loadingPaso1 = false
-                errorPaso1 = t.message ?: "Error desconocido"
-            }
-        }
+        // Simulación local: habilitar paso 2 sin red
+        loadingPaso1 = false
+        paso2Habilitado = true
     }
 
     fun confirmarNueva() {
@@ -395,36 +320,8 @@ fun RecuperarContrasenaView(onSuccessBackToLogin: () -> Unit = {}) {
         loadingPaso2 = true
         errorPaso2 = null
         CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val urlStr = "https://guillesilva04business.app.n8n.cloud/webhook/otp2?nueva_contrasena=" +
-                    java.net.URLEncoder.encode(nuevaPass, "UTF-8") +
-                    "&codigo=" + java.net.URLEncoder.encode(codigo, "UTF-8")
-                val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    connectTimeout = 15000
-                    readTimeout = 20000
-                }
-                val ok = conn.responseCode in 200..299
-                val responseText = try { (if (ok) conn.inputStream else conn.errorStream).bufferedReader().readText() } catch (_: Throwable) { "" }
-                conn.disconnect()
-                if (!ok) {
-                    loadingPaso2 = false
-                    errorPaso2 = if (responseText.isNotBlank()) responseText else "Código o contraseña incorrectos."
-                } else {
-                    val json = runCatching { JSONObject(responseText) }.getOrNull()
-                    val all = json?.optString("all")
-                    if (all == "succes") {
-                        loadingPaso2 = false
-                        showSuccess = true
-                    } else {
-                        loadingPaso2 = false
-                        errorPaso2 = "Código o contraseña incorrectos."
-                    }
-                }
-            } catch (t: Throwable) {
-                loadingPaso2 = false
-                errorPaso2 = t.message ?: "Error desconocido"
-            }
+            loadingPaso2 = false
+            showSuccess = true
         }
     }
 

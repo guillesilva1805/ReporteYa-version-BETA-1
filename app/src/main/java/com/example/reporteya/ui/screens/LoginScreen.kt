@@ -29,13 +29,22 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.core.content.edit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.example.reporteya.services.AuthService
+import com.example.reporteya.services.SecureStorage
+import com.example.reporteya.services.RoleService
+import com.example.reporteya.BuildConfig
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import org.json.JSONArray
-import org.json.JSONObject
+
+private enum class Rol { Empleado, Gerente }
 
 @Composable
 fun LoginScreen(
@@ -44,7 +53,6 @@ fun LoginScreen(
     onNavigateRegistroEmpleado: () -> Unit,
     onNavigateRecuperarContrasena: () -> Unit
 ) {
-    enum class Rol { Empleado, Gerente }
     var rol by remember { mutableStateOf(Rol.Empleado) }
     var dni by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -56,12 +64,7 @@ fun LoginScreen(
     val context = LocalContext.current
 
     fun validate(): Boolean {
-        dniError = when {
-            dni.isBlank() -> "Ingresa tu DNI"
-            dni.any { !it.isDigit() } -> "El DNI solo debe tener números"
-            dni.length < 8 || dni.length > 10 -> "El DNI debe tener entre 8 y 10 dígitos"
-            else -> null
-        }
+        dniError = if (dni.isBlank()) "Ingresa tu email" else null
         passError = if (password.isBlank()) "Ingresa tu contraseña" else null
         return dniError == null && passError == null
     }
@@ -72,77 +75,49 @@ fun LoginScreen(
         error = null
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val (urlStr, body) = if (rol == Rol.Empleado) {
-                    "https://guillesilva04business.app.n8n.cloud/webhook/login" to (
-                        """{"dni":"${'$'}dni","contraseña":"${'$'}password","correo":"","codigoInvitacion":""}"""
-                    )
-                } else {
-                    "https://guillesilva04business.app.n8n.cloud/webhook/iniciarsesiongerente" to (
-                        """{"dni":"${'$'}dni","contraseña":"${'$'}password"}"""
-                    )
-                }
-                val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    setRequestProperty("Content-Type", "application/json")
-                    doOutput = true
-                    connectTimeout = 15000
-                    readTimeout = 20000
-                }
-                conn.outputStream.use { it.write(body.encodeToByteArray()) }
-                val ok = conn.responseCode in 200..299
-                val responseText = try { (if (ok) conn.inputStream else conn.errorStream).bufferedReader().readText() } catch (_: Throwable) { "" }
-                conn.disconnect()
-                if (!ok) {
-                    cargando = false
-                    error = "Error de inicio de sesión (código ${'$'}{conn.responseCode})"
-                } else {
-                    if (rol == Rol.Empleado) {
-                        // Para empleado: éxito por 2xx, persistir sesión y navegar
-                        runCatching {
-                            val prefs = context.getSharedPreferences("session", android.content.Context.MODE_PRIVATE)
-                            prefs.edit().putString("dniEmpleado", dni).apply()
+                val input = dni.trim()
+                val maybeResolver = BuildConfig.DNI_RESOLVER_URL
+                val emailToUse = if (maybeResolver.isNotBlank() && input.all { it.isDigit() } && input.length in 8..10) {
+                    try {
+                        val url = URL(maybeResolver)
+                        val body = JSONObject().apply { put("dni", input) }.toString()
+                        val conn = (url.openConnection() as HttpURLConnection).apply {
+                            requestMethod = "POST"
+                            setRequestProperty("Content-Type", "application/json")
+                            doOutput = true
+                            connectTimeout = 15000
+                            readTimeout = 15000
                         }
+                        conn.outputStream.use { it.write(body.encodeToByteArray()) }
+                        val ok = conn.responseCode in 200..299
+                        val resp = (if (ok) conn.inputStream else conn.errorStream).bufferedReader().readText()
+                        conn.disconnect()
+                        val json = JSONObject(resp)
+                        if (ok && json.optBoolean("ok") && json.optString("email").isNotBlank()) json.optString("email") else input
+                    } catch (_: Throwable) { input }
+                } else input
+
+                val signIn = AuthService.signInWithEmail(context, emailToUse, password)
+                signIn.fold(onSuccess = { auth ->
+                    // Guardar sesión local segura
+                    SecureStorage.setSession(context, emailToUse, auth.accessToken, auth.refreshToken)
+                    // Decidir navegación por rol real
+                    val role = RoleService.fetchRole(context, auth.accessToken, auth.userId).getOrElse { "employee" }
+                    withContext(Dispatchers.Main) {
                         cargando = false
-                        onEmpleadoSuccess()
-                    } else {
-                        // Gerente: parsear respuesta según formatos aceptados
-                        var exito = false
-                        var errorMsg: String? = null
-                        runCatching {
-                            if (responseText.trim().startsWith("[")) {
-                                val arr = JSONArray(responseText)
-                                val bodyObj = arr.optJSONObject(0)?.optJSONObject("response")?.optJSONObject("body")
-                                exito = bodyObj?.optBoolean("éxito") == true
-                            } else {
-                                val obj = JSONObject(responseText)
-                                when {
-                                    obj.has("éxito") -> exito = obj.optBoolean("éxito")
-                                    obj.has("success") && obj.optBoolean("success") == false -> {
-                                        errorMsg = obj.optString("message").ifBlank { null }
-                                        exito = false
-                                    }
-                                }
-                            }
-                        }.onFailure {
-                            errorMsg = "Formato de respuesta inválido."
-                        }
-                        if (exito) {
-                            // Persistir sesión de gerente
-                            runCatching {
-                                val prefs = context.getSharedPreferences("session", android.content.Context.MODE_PRIVATE)
-                                prefs.edit().putString("dniGerente", dni).apply()
-                            }
-                            cargando = false
-                            onGerenteSuccess()
-                        } else {
-                            cargando = false
-                            error = errorMsg ?: "Formato de respuesta inválido."
-                        }
+                        if (role.equals("manager", true) || role.equals("approver", true) || role.equals("admin", true)) onGerenteSuccess() else onEmpleadoSuccess()
                     }
-                }
+                }, onFailure = { e ->
+                    withContext(Dispatchers.Main) {
+                        cargando = false
+                        error = "Credenciales inválidas o cuenta no habilitada."
+                    }
+                })
             } catch (t: Throwable) {
-                cargando = false
-                error = "Error de red: ${'$'}{t.message ?: "desconocido"}"
+                withContext(Dispatchers.Main) {
+                    cargando = false
+                    error = "Error de red. Intenta nuevamente."
+                }
             }
         }
     }
@@ -158,22 +133,39 @@ fun LoginScreen(
         Text("Inicia sesión en tu cuenta", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(16.dp))
 
-        // Segmented control (Empleado / Gerente)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { rol = Rol.Empleado }, enabled = rol != Rol.Empleado) { Text("Empleado") }
-            OutlinedButton(onClick = { rol = Rol.Gerente }, enabled = rol != Rol.Gerente) { Text("Gerente") }
+        // Selector de rol con alto contraste
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (rol == Rol.Empleado) {
+                Button(
+                    onClick = { /* seleccionado */ },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0), contentColor = Color.White)
+                ) { Text("Empleado") }
+            } else {
+                OutlinedButton(onClick = { rol = Rol.Empleado }) { Text("Empleado") }
+            }
+
+            if (rol == Rol.Gerente) {
+                Button(
+                    onClick = { /* seleccionado */ },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32), contentColor = Color.White)
+                ) { Text("Gerente") }
+            } else {
+                OutlinedButton(onClick = { rol = Rol.Gerente }) { Text("Gerente") }
+            }
         }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = if (rol == Rol.Empleado) "Rol seleccionado: Empleado" else "Rol seleccionado: Gerente",
+            color = if (rol == Rol.Empleado) Color(0xFF1565C0) else Color(0xFF2E7D32)
+        )
         Spacer(Modifier.height(16.dp))
 
         OutlinedTextField(
             value = dni,
-            onValueChange = {
-                val digits = it.filter { ch -> ch.isDigit() }
-                dni = digits.take(10)
-            },
-            label = { Text("DNI") },
+            onValueChange = { dni = it.trim() },
+            label = { Text(if (BuildConfig.DNI_RESOLVER_URL.isNotBlank()) "DNI o email" else "Email") },
             isError = dniError != null,
-            supportingText = { if (dniError != null) Text(dniError!!) else Text("Solo números") }
+            supportingText = { if (dniError != null) Text(dniError!!) else Text("") }
         )
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(
@@ -184,7 +176,7 @@ fun LoginScreen(
             trailingIcon = {
                 IconButton(onClick = { showPassword = !showPassword }) {
                     val label = if (showPassword) "Ocultar" else "Mostrar"
-                    Icon(imageVector = androidx.compose.material.icons.Icons.Default.Visibility, contentDescription = label)
+                    Icon(imageVector = Icons.Filled.Visibility, contentDescription = label)
                 }
             },
             isError = passError != null,
@@ -198,6 +190,10 @@ fun LoginScreen(
         ) {
             Text(if (cargando) "Cargando…" else "Iniciar sesión")
         }
+        if (error != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(error ?: "", color = Color.Red)
+        }
 
         if (rol == Rol.Empleado) {
             Spacer(Modifier.height(8.dp))
@@ -208,13 +204,14 @@ fun LoginScreen(
         }
     }
 
-    if (error != null) {
-        AlertDialog(
-            onDismissRequest = { error = null },
-            confirmButton = { TextButton(onClick = { error = null }) { Text("OK") } },
-            title = { Text("Error") },
-            text = { Text(error!!) }
-        )
-    }
+    // El diálogo de error sigue disponible si decides mantenerlo; comentado para evitar duplicidad visual
+    // if (error != null) {
+    //     AlertDialog(
+    //         onDismissRequest = { error = null },
+    //         confirmButton = { TextButton(onClick = { error = null }) { Text("OK") } },
+    //         title = { Text("Error") },
+    //         text = { Text(error!!) }
+    //     )
+    // }
 }
 

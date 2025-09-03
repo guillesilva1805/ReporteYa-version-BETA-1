@@ -10,9 +10,11 @@ import com.example.reporteya.ui.screens.AdminPanelScreen
 import com.example.reporteya.ui.reporte.ReporteFlowScreen
 import com.example.reporteya.ui.screens.LoginScreen
 import com.example.reporteya.ui.screens.RoleSelectionScreen
-import com.example.reporteya.ui.screens.OtpEmpleadoView
+import com.example.reporteya.ui.screens.CheckEmailView
 import com.example.reporteya.ui.screens.RegistrationEmpleadoView
 import com.example.reporteya.ui.screens.RecuperarContrasenaView
+import com.example.reporteya.services.AuthService
+import com.example.reporteya.services.SecureStorage
 
 enum class AppRoute(val route: String) {
     Login("login"),
@@ -25,12 +27,17 @@ fun AppNav() {
     val navController = rememberNavController()
     val startDestination = run {
         val ctx = androidx.compose.ui.platform.LocalContext.current
-        val prefs = ctx.getSharedPreferences("session", android.content.Context.MODE_PRIVATE)
-        when {
-            !prefs.getString("dniEmpleado", null).isNullOrBlank() -> AppRoute.EmployeeFlow.route
-            !prefs.getString("dniGerente", null).isNullOrBlank() -> AppRoute.AdminPanel.route
-            else -> AppRoute.Login.route
+        val refresh = SecureStorage.getRefresh(ctx)
+        val jwt = SecureStorage.getJwt(ctx)
+        // Intentar refresh si existe
+        if (!refresh.isNullOrBlank()) {
+            val res = AuthService.refresh(ctx, refresh)
+            res.getOrNull()?.let { new ->
+                SecureStorage.setSession(ctx, SecureStorage.getDni(ctx) ?: "", new.accessToken, new.refreshToken)
+                return@run AppRoute.EmployeeFlow.route // navegación fina se decidirá tras login/rol
+            }
         }
+        if (!jwt.isNullOrBlank()) AppRoute.EmployeeFlow.route else AppRoute.Login.route
     }
     NavHost(navController = navController, startDestination = startDestination) {
         composable(AppRoute.Login.route) {
@@ -55,20 +62,12 @@ fun AppNav() {
             AdminPanelScreen()
         }
         composable("registrationEmpleado") {
-            RegistrationEmpleadoView(onRegisteredPendingId = { pendingId ->
-                navController.navigate("otp/$pendingId")
+            RegistrationEmpleadoView(onRegisteredPendingId = { _ ->
+                navController.navigate("checkEmail")
             })
         }
         composable("recuperarContrasena") { RecuperarContrasenaView(onSuccessBackToLogin = { navController.navigate(AppRoute.Login.route) { popUpTo(AppRoute.Login.route) { inclusive = true } } }) }
-        composable(
-            route = "otp/{pendingId}",
-            arguments = listOf(navArgument("pendingId") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val pid = backStackEntry.arguments?.getString("pendingId").orEmpty()
-            OtpEmpleadoView(pendingId = pid, onOtpSuccessGoLogin = {
-                navController.navigate(AppRoute.Login.route) { popUpTo(AppRoute.Login.route) { inclusive = true } }
-            })
-        }
+        composable("checkEmail") { CheckEmailView(onBackToLogin = { navController.navigate(AppRoute.Login.route) { popUpTo(AppRoute.Login.route) { inclusive = true } } }) }
     }
 }
 

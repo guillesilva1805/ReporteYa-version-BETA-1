@@ -95,7 +95,7 @@ private fun Resumen(estado: com.example.reporteya.ui.reporte.common.RespuestasRe
     @Composable
     fun Linea(titulo: String, valor: String?) {
         val mostrado = if (valor.isNullOrBlank()) "—" else valor
-        Text("${'$'}titulo: ${'$'}mostrado")
+        Text("$titulo: $mostrado")
     }
     Linea("1) Supervisor", estado.supervisor)
     Linea("2) Frente de trabajo", estado.frente)
@@ -106,7 +106,7 @@ private fun Resumen(estado: com.example.reporteya.ui.reporte.common.RespuestasRe
     Linea("6) Metrado", estado.metrado)
     Linea("7) Hora inicio", estado.horaInicio)
     Linea("7) Hora fin", estado.horaFin)
-    Text("8) Fotos/Vídeos: ${'$'}{estado.media.size} archivo(s)")
+    Text("8) Fotos/Vídeos: ${estado.media.size} archivo(s)")
     if (estado.media.isNotEmpty()) {
         Spacer(Modifier.height(6.dp))
         LazyRow {
@@ -149,6 +149,12 @@ private fun enviarConUpload(
             val conn = (URL(urlFinal).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json")
+                // Adjuntar JWT si existe
+                val prefs = context.getSharedPreferences("session", android.content.Context.MODE_PRIVATE)
+                val jwt = prefs.getString("jwt", null)
+                if (!jwt.isNullOrBlank()) {
+                    setRequestProperty("Authorization", "Bearer $jwt")
+                }
                 doOutput = true
                 connectTimeout = 15000
                 readTimeout = 20000
@@ -157,7 +163,7 @@ private fun enviarConUpload(
             val ok = conn.responseCode in 200..299
             val code = conn.responseCode
             conn.disconnect()
-            if (ok) onOk() else onFail("No se pudo enviar (código ${'$'}code)")
+            if (ok) onOk() else onFail(if (code == 401 || code == 403) "Sesión expirada. Inicia sesión de nuevo." else "No se pudo enviar (código $code)")
         } catch (t: Throwable) {
             onFail(t.message ?: "Error desconocido")
         }
@@ -172,21 +178,21 @@ private fun buildJson(
     val media = mediaLinks.joinToString(prefix = "[", postfix = "]") { '"' + esc(it) + '"' }
     return """
       {
-        "supervisor": "${'$'}{esc(estado.supervisor)}",
-        "frente": "${'$'}{esc(estado.frente)}",
-        "ubicacion": "${'$'}{esc(estado.ubicacion)}",
-        "cuadrilla": "${'$'}{esc(estado.cuadrilla)}",
-        "disciplina": "${'$'}{esc(estado.disciplina)}",
-        "actividad": "${'$'}{esc(estado.actividad)}",
-        "metrado": "${'$'}{esc(estado.metrado)}",
-        "horaInicio": "${'$'}{esc(estado.horaInicio)}",
-        "horaFin": "${'$'}{esc(estado.horaFin)}",
-        "media": ${'$'}media,
-        "equipos": "${'$'}{esc(estado.equipos)}",
-        "materiales": "${'$'}{esc(estado.materiales)}",
-        "clima": "${'$'}{esc(estado.clima)}",
-        "recursos": "${'$'}{esc(estado.recursos)}",
-        "epp": "${'$'}{esc(estado.epp)}"
+        "supervisor": "${esc(estado.supervisor)}",
+        "frente": "${esc(estado.frente)}",
+        "ubicacion": "${esc(estado.ubicacion)}",
+        "cuadrilla": "${esc(estado.cuadrilla)}",
+        "disciplina": "${esc(estado.disciplina)}",
+        "actividad": "${esc(estado.actividad)}",
+        "metrado": "${esc(estado.metrado)}",
+        "horaInicio": "${esc(estado.horaInicio)}",
+        "horaFin": "${esc(estado.horaFin)}",
+        "media": $media,
+        "equipos": "${esc(estado.equipos)}",
+        "materiales": "${esc(estado.materiales)}",
+        "clima": "${esc(estado.clima)}",
+        "recursos": "${esc(estado.recursos)}",
+        "epp": "${esc(estado.epp)}"
       }
     """.trimIndent()
 }
@@ -217,13 +223,13 @@ private fun uploadUriToSupabase(context: Context, uri: android.net.Uri): String?
     // Derivar nombre de archivo y content-type
     val resolver = context.contentResolver
     val type = resolver.getType(uri) ?: "application/octet-stream"
-    val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(type)?.let { ".${'$'}it" } ?: ""
-    val filename = "${'$'}{System.currentTimeMillis()}_${'$'}{(1000..9999).random()}${'$'}ext"
-    val uploadUrl = "${'$'}supabaseUrl/storage/v1/object/${'$'}bucket/${'$'}filename"
+    val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(type)?.let { ".$it" } ?: ""
+    val filename = "${System.currentTimeMillis()}_${(1000..9999).random()}$ext"
+    val uploadUrl = "$supabaseUrl/storage/v1/object/$bucket/$filename"
     return try {
         val conn = (URL(uploadUrl).openConnection() as HttpURLConnection).apply {
             requestMethod = "PUT"
-            setRequestProperty("Authorization", "Bearer ${'$'}supabaseKey")
+            setRequestProperty("Authorization", "Bearer $supabaseKey")
             setRequestProperty("apikey", supabaseKey)
             setRequestProperty("Content-Type", type)
             doOutput = true
@@ -244,7 +250,7 @@ private fun uploadUriToSupabase(context: Context, uri: android.net.Uri): String?
         conn.disconnect()
         if (!ok) return null
         // Construir URL pública (requiere bucket público)
-        "${'$'}supabaseUrl/storage/v1/object/public/${'$'}bucket/${'$'}filename"
+        "$supabaseUrl/storage/v1/object/public/$bucket/$filename"
     } catch (_: Throwable) { null }
 }
 
