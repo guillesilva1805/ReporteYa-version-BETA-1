@@ -75,6 +75,17 @@ fun LoginScreen(
         error = null
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                // Bypass temporal para pruebas: solo en debug
+                val inputByUser = dni.trim()
+                if (BuildConfig.DEBUG && inputByUser.equals("gasa132004@gmail.com", ignoreCase = true) && password == "60023") {
+                    withContext(Dispatchers.Main) {
+                        cargando = false
+                        SecureStorage.setSession(context, inputByUser, "debug-token", null)
+                        onEmpleadoSuccess()
+                    }
+                    return@launch
+                }
+
                 val input = dni.trim()
                 val maybeResolver = BuildConfig.DNI_RESOLVER_URL
                 val emailToUse = if (maybeResolver.isNotBlank() && input.all { it.isDigit() } && input.length in 8..10) {
