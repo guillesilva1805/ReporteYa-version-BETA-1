@@ -70,7 +70,7 @@ fun ReporteFlowScreen(onFinish: () -> Unit, onLogout: () -> Unit) {
             10 -> !respuestas.materiales.isNullOrBlank()
             11 -> !respuestas.clima.isNullOrBlank()
             12 -> !respuestas.recursos.isNullOrBlank()
-            13 -> !respuestas.epp.isNullOrBlank()hay 
+            13 -> !respuestas.epp.isNullOrBlank()
             14 -> (
                 !respuestas.supervisor.isNullOrBlank() &&
                 !respuestas.frente.isNullOrBlank() &&

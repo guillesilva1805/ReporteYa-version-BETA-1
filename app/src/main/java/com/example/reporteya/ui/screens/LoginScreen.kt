@@ -142,7 +142,7 @@ fun LoginScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Logo de la empresa
-        Image(painter = painterResource(id = R.mipmap.ic_launcher), contentDescription = "Logo", modifier = Modifier.height(72.dp))
+        Image(painter = painterResource(id = R.drawable.logo_jjc), contentDescription = "Logo", modifier = Modifier.height(72.dp))
         Spacer(Modifier.height(8.dp))
         Text("Inicia sesión en tu cuenta", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(16.dp))

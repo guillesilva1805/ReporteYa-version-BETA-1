@@ -6,6 +6,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -59,7 +60,7 @@ fun Paso05DisciplinaActividad(onValidity: (Boolean) -> Unit) {
                         onValueChange = {},
                         label = { Text("Disciplina") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDisc) },
-                        modifier = androidx.compose.ui.Modifier.fillMaxWidth().menuAnchor()
+                        modifier = androidx.compose.ui.Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                     )
                     DropdownMenu(expanded = expandedDisc, onDismissRequest = { expandedDisc = false }) {
                         // Mostrar nombres de disciplinas
@@ -92,7 +93,7 @@ fun Paso05DisciplinaActividad(onValidity: (Boolean) -> Unit) {
                         onValueChange = {},
                         label = { Text("Actividad") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedAct) },
-                        modifier = androidx.compose.ui.Modifier.fillMaxWidth().menuAnchor()
+                        modifier = androidx.compose.ui.Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                     )
                     DropdownMenu(expanded = expandedAct, onDismissRequest = { expandedAct = false }) {
                         actividades.forEach { a ->
