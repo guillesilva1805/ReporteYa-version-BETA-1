@@ -40,6 +40,9 @@ import com.example.reporteya.services.AuthService
 import com.example.reporteya.services.SecureStorage
 import com.example.reporteya.services.RoleService
 import com.example.reporteya.BuildConfig
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.example.reporteya.R
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -138,8 +141,8 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Logo (placeholder)
-        Text("ReporteYa", style = MaterialTheme.typography.titleLarge)
+        // Logo de la empresa
+        Image(painter = painterResource(id = R.mipmap.ic_launcher), contentDescription = "Logo", modifier = Modifier.height(72.dp))
         Spacer(Modifier.height(8.dp))
         Text("Inicia sesión en tu cuenta", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(16.dp))
