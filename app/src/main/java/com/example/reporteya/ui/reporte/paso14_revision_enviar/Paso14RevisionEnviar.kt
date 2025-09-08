@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.reporteya.ui.reporte.common.respuestas_reporte
+import com.example.reporteya.services.SecureStorage
 import coil.compose.AsyncImage
 import java.net.HttpURLConnection
 import java.net.URL
@@ -149,12 +150,9 @@ private fun enviarConUpload(
             val conn = (URL(urlFinal).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json")
-                // Adjuntar JWT si existe
-                val prefs = context.getSharedPreferences("session", android.content.Context.MODE_PRIVATE)
-                val jwt = prefs.getString("jwt", null)
-                if (!jwt.isNullOrBlank()) {
-                    setRequestProperty("Authorization", "Bearer $jwt")
-                }
+                // Adjuntar JWT si existe (desde SecureStorage)
+                val jwt = SecureStorage.getJwt(context)
+                if (!jwt.isNullOrBlank()) setRequestProperty("Authorization", "Bearer $jwt")
                 doOutput = true
                 connectTimeout = 15000
                 readTimeout = 20000
