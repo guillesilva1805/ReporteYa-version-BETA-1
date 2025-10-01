@@ -16,6 +16,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.graphics.Color
 import com.example.reporteya.ui.reporte.common.respuestas_reporte
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -108,7 +110,7 @@ fun Paso06Metrado(onValidity: (Boolean) -> Unit) {
                     TextButton(onClick = {
                         items = items.toMutableList().also { it.removeAt(index) }
                         recalcAndStore()
-                    }) { Text("Eliminar") }
+                    }, colors = ButtonDefaults.textButtonColors(contentColor = Color.Black)) { Text("Eliminar") }
                 }
             }
 
@@ -119,10 +121,10 @@ fun Paso06Metrado(onValidity: (Boolean) -> Unit) {
             Button(onClick = {
                 items = items.toMutableList().also { it.add("" to "") }
                 recalcAndStore()
-            }) { Text("Agregar") }
+            }) { Text("Agregar fila") }
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(8.dp))
         Text("Ingresa cantidad y elige unidad. Puedes agregar o eliminar filas.")
     }
 }

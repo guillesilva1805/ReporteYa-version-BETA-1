@@ -3,6 +3,9 @@ package com.example.reporteya.ui.reporte.paso09_equipos
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,6 +31,7 @@ fun Paso09Equipos(onValidity: (Boolean) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Equipos utilizados") }
         )
+        Spacer(Modifier.height(8.dp))
     }
 }
 

@@ -10,8 +10,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.outlined.PowerSettingsNew
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import com.example.reporteya.R
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -100,6 +113,10 @@ fun ReporteFlowScreen(onFinish: () -> Unit, onLogout: () -> Unit) {
     var showLogoutConfirm by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        // Logo superior
+        Image(painter = painterResource(id = R.drawable.logo_jjc), contentDescription = "Logo", 
+            modifier = Modifier.height(72.dp))
+        Spacer(Modifier.height(12.dp))
         LinearProgressIndicator(progress = { progreso }, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(12.dp))
 
@@ -121,16 +138,36 @@ fun ReporteFlowScreen(onFinish: () -> Unit, onLogout: () -> Unit) {
                 // Envío exitoso → volver al paso 1 automáticamente
                 paso = 1
                 onFinish()
-            }, onValidity = { valido = isStepValid(14) })
+            }, onValidity = { valido = isStepValid(14) }, onEditStep = { target ->
+                if (target in 1..13) paso = target
+            })
         }
 
+        Spacer(Modifier.height(8.dp))
+        // Paso X de 14
+        Text("Paso $paso de 14", color = com.example.reporteya.ui.theme.BrandGreyText)
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = { if (paso > 1) paso -= 1 },
+                enabled = paso > 1,
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.weight(1f).height(52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = com.example.reporteya.ui.theme.BrandBluePrimary, contentColor = Color.White)
+            ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Anterior") }
+            Button(
+                onClick = { if (paso < 14 && valido) paso += 1 },
+                enabled = (paso < 14 && valido),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.weight(1f).height(52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = com.example.reporteya.ui.theme.BrandBluePrimary, contentColor = Color.White)
+            ) { Text("Siguiente"); Spacer(Modifier.width(8.dp)); Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null) }
+        }
         Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-            TextButton(onClick = { if (paso > 1) paso -= 1 }, enabled = paso > 1) { Text("Anterior") }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { if (paso < 14 && valido) paso += 1 }, enabled = (paso < 14 && valido)) { Text("Siguiente") }
-                TextButton(onClick = { showLogoutConfirm = true }) { Text("Cerrar sesión") }
-            }
+        TextButton(onClick = { showLogoutConfirm = true }) {
+            Icon(Icons.Outlined.PowerSettingsNew, contentDescription = null, tint = com.example.reporteya.ui.theme.BrandError)
+            Spacer(Modifier.width(6.dp))
+            Text("Cerrar sesión", color = com.example.reporteya.ui.theme.BrandError)
         }
     }
 

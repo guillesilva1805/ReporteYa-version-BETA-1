@@ -9,10 +9,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.reporteya.navigation.AppNav
+import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
 import com.example.reporteya.ui.theme.ReporteYaTheme
 
 class MainActivity : ComponentActivity() {
@@ -21,7 +22,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             ReporteYaTheme {
-                AppNav()
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    AppNav()
+                }
             }
         }
     }

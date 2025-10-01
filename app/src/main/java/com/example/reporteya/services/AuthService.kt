@@ -96,6 +96,29 @@ object AuthService {
         }
     }
 
+    fun recoverPassword(context: Context, email: String, redirectTo: String): Result<Unit> {
+        return runCatching {
+            val url = URL("${BuildConfig.SUPABASE_URL}/auth/v1/recover")
+            val body = JSONObject().apply {
+                put("email", email)
+                put("redirect_to", redirectTo)
+            }.toString()
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                setRequestProperty("Content-Type", "application/json")
+                doOutput = true
+                connectTimeout = 20000
+                readTimeout = 20000
+            }
+            conn.outputStream.use { it.write(body.encodeToByteArray()) }
+            val ok = conn.responseCode in 200..299
+            val resp = (if (ok) conn.inputStream else conn.errorStream).bufferedReader().readText()
+            conn.disconnect()
+            if (!ok) throw IllegalStateException(parseError(resp))
+        }
+    }
+
     fun getUser(context: Context, jwt: String): Result<JSONObject> {
         return runCatching {
             val url = URL("${BuildConfig.SUPABASE_URL}/auth/v1/user")

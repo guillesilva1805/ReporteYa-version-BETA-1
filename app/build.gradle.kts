@@ -1,3 +1,5 @@
+@file:Suppress("SpellCheckingInspection")
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.android)
@@ -6,12 +8,12 @@ plugins {
 
 android {
   namespace = "com.example.reporteya"
-  compileSdk = 35
+  compileSdk = 36
 
   defaultConfig {
     applicationId = "com.example.reporteya"
     minSdk = 24
-    targetSdk = 35
+    targetSdk = 36
     versionCode = 1
     versionName = "1.0"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -19,8 +21,9 @@ android {
     val supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVwcGRramZqeHRqbnVrZnRnd2h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc3MDE3NjMsImV4cCI6MjA2MzI3Nzc2M30._bPFFm4NqghiVPmytaGkiD40QFc1Ct-oIQx1gOK0g74"
     val supabaseBucket = (project.findProperty("SUPABASE_BUCKET") as String?) ?: "public"
     val n8nWebhookUrl = "https://guillesilva04business.app.n8n.cloud/webhook/1"
-    val inviteApiBase = (project.findProperty("INVITE_API_BASE") as String?) ?: ""
+    val inviteApiBase = (project.findProperty("INVITE_API_BASE") as String?) ?: "https://uppdkjfjxtjnukftgwhz.supabase.co/functions/v1"
     val dniResolverUrl = (project.findProperty("DNI_RESOLVER_URL") as String?) ?: ""
+    val passwordResetRedirect = (project.findProperty("PASSWORD_RESET_REDIRECT") as String?) ?: "https://reporteya-reset.vercel.app/"
 
     buildConfigField("String", "SUPABASE_URL", '"' + supabaseUrl + '"')
     buildConfigField("String", "SUPABASE_ANON_KEY", '"' + supabaseAnonKey + '"')
@@ -28,24 +31,17 @@ android {
     buildConfigField("String", "N8N_WEBHOOK_URL", '"' + n8nWebhookUrl + '"')
     buildConfigField("String", "INVITE_API_BASE", '"' + inviteApiBase + '"')
     buildConfigField("String", "DNI_RESOLVER_URL", '"' + dniResolverUrl + '"')
+    buildConfigField("String", "PASSWORD_RESET_REDIRECT", '"' + passwordResetRedirect + '"')
   }
 
   buildTypes {
     debug {
-      buildConfigField(
-        "String",
-        "INVITE_API_BASE",
-        "\"https://assured-expenditure-stories-musical.trycloudflare.com\""
-      )
+      buildConfigField("String","INVITE_API_BASE","\"https://uppdkjfjxtjnukftgwhz.supabase.co/functions/v1\"")
     }
     release {
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      buildConfigField(
-        "String",
-        "INVITE_API_BASE",
-        "\"https://assured-expenditure-stories-musical.trycloudflare.com\""
-      )
+      buildConfigField("String","INVITE_API_BASE","\"https://uppdkjfjxtjnukftgwhz.supabase.co/functions/v1\"")
     }
   }
 
@@ -78,7 +74,7 @@ dependencies {
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.navigation.compose)
   implementation(libs.coil.compose)
-  implementation("androidx.security:security-crypto:1.1.0-alpha06")
+  implementation(libs.androidx.security.crypto)
 
   debugImplementation(libs.androidx.ui.tooling)
   androidTestImplementation(platform(libs.androidx.compose.bom))

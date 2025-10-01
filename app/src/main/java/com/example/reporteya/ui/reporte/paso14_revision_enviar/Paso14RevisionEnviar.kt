@@ -1,6 +1,7 @@
 package com.example.reporteya.ui.reporte.paso14_revision_enviar
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,7 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.reporteya.BuildConfig
 
 @Composable
-fun Paso14RevisionEnviar(onEnviado: () -> Unit, onValidity: (Boolean) -> Unit) {
+fun Paso14RevisionEnviar(onEnviado: () -> Unit, onValidity: (Boolean) -> Unit, onEditStep: (Int) -> Unit) {
     val estado by respuestas_reporte.estado.collectAsState()
     var error by remember { mutableStateOf<String?>(null) }
     var showConfirm by remember { mutableStateOf(false) }
@@ -45,7 +46,7 @@ fun Paso14RevisionEnviar(onEnviado: () -> Unit, onValidity: (Boolean) -> Unit) {
     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
         Text("Revisión final: verifica tus respuestas")
         Spacer(Modifier.height(8.dp))
-        Resumen(estado)
+        Resumen(estado, onEditStep)
         Spacer(Modifier.height(12.dp))
         Button(onClick = { showConfirm = true }, enabled = !enviando) { Text(if (enviando) "Cargando…" else "Enviar reporte") }
         if (showConfirm) {
@@ -92,22 +93,28 @@ fun Paso14RevisionEnviar(onEnviado: () -> Unit, onValidity: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun Resumen(estado: com.example.reporteya.ui.reporte.common.RespuestasReporte) {
+private fun Resumen(estado: com.example.reporteya.ui.reporte.common.RespuestasReporte, onEditStep: (Int) -> Unit) {
     @Composable
-    fun Linea(titulo: String, valor: String?) {
+    fun Linea(titulo: String, valor: String?, paso: Int) {
         val mostrado = if (valor.isNullOrBlank()) "—" else valor
-        Text("$titulo: $mostrado")
+        Row(modifier = androidx.compose.ui.Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
+            Text("$titulo: $mostrado")
+            TextButton(onClick = { onEditStep(paso) }) { Text("Editar") }
+        }
     }
-    Linea("1) Supervisor", estado.supervisor)
-    Linea("2) Frente de trabajo", estado.frente)
-    Linea("3) Ubicación específica", estado.ubicacion)
-    Linea("4) Datos de la cuadrilla", estado.cuadrilla)
-    Linea("5) Disciplina", estado.disciplina)
-    Linea("5) Actividad", estado.actividad)
-    Linea("6) Metrado", estado.metrado)
-    Linea("7) Hora inicio", estado.horaInicio)
-    Linea("7) Hora fin", estado.horaFin)
-    Text("8) Fotos/Vídeos: ${estado.media.size} archivo(s)")
+    Linea("1) Supervisor", estado.supervisor, 1)
+    Linea("2) Frente de trabajo", estado.frente, 2)
+    Linea("3) Ubicación específica", estado.ubicacion, 3)
+    Linea("4) Datos de la cuadrilla", estado.cuadrilla, 4)
+    Linea("5) Disciplina", estado.disciplina, 5)
+    Linea("5) Actividad", estado.actividad, 5)
+    Linea("6) Metrado", estado.metrado, 6)
+    Linea("7) Hora inicio", estado.horaInicio, 7)
+    Linea("7) Hora fin", estado.horaFin, 7)
+    Row(modifier = androidx.compose.ui.Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
+        Text("8) Fotos/Vídeos: ${estado.media.size} archivo(s)")
+        TextButton(onClick = { onEditStep(8) }) { Text("Editar") }
+    }
     if (estado.media.isNotEmpty()) {
         Spacer(Modifier.height(6.dp))
         LazyRow {
@@ -117,11 +124,11 @@ private fun Resumen(estado: com.example.reporteya.ui.reporte.common.RespuestasRe
             }
         }
     }
-    Linea("9) Equipos utilizados", estado.equipos)
-    Linea("10) Materiales utilizados", estado.materiales)
-    Linea("11) Restricciones de clima", estado.clima)
-    Linea("12) Restricciones de recursos", estado.recursos)
-    Linea("13) Restricciones de EPP", estado.epp)
+    Linea("9) Equipos utilizados", estado.equipos, 9)
+    Linea("10) Materiales utilizados", estado.materiales, 10)
+    Linea("11) Restricciones de clima", estado.clima, 11)
+    Linea("12) Restricciones de recursos", estado.recursos, 12)
+    Linea("13) Restricciones de EPP", estado.epp, 13)
 }
 
 private fun enviarConUpload(

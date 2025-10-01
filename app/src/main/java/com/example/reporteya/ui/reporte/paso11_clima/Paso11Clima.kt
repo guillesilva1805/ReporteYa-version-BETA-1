@@ -3,6 +3,9 @@ package com.example.reporteya.ui.reporte.paso11_clima
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,6 +31,7 @@ fun Paso11Clima(onValidity: (Boolean) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Restricciones de clima") }
         )
+        Spacer(Modifier.height(8.dp))
     }
 }
 

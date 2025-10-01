@@ -7,6 +7,18 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -53,7 +65,8 @@ fun Paso05DisciplinaActividad(onValidity: (Boolean) -> Unit) {
             cargando -> CircularProgressIndicator()
             false -> Text("") // NUNCA mostrar error
             else -> {
-                ExposedDropdownMenuBox(expanded = expandedDisc, onExpandedChange = { expandedDisc = !expandedDisc }) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = androidx.compose.ui.Modifier.fillMaxWidth()) {
+                ExposedDropdownMenuBox(expanded = expandedDisc, onExpandedChange = { expandedDisc = !expandedDisc }, modifier = androidx.compose.ui.Modifier.weight(1f)) {
                     TextField(
                         readOnly = true,
                         value = disciplina,
@@ -76,6 +89,12 @@ fun Paso05DisciplinaActividad(onValidity: (Boolean) -> Unit) {
                             })
                         }
                     }
+                }
+                FilledIconButton(
+                    onClick = { scope.launch { DisciplinaActividadService.cargar(context, forzarRecarga = true) } },
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = com.example.reporteya.ui.theme.BrandApprove)
+                ) { Icon(Icons.Filled.Refresh, contentDescription = "Recargar", tint = Color.White) }
                 }
                 // Filtrar por id si lo conocemos; si no, caer a filtrar por nombre (back-compat)
                 val actividades = if (!disciplina.isNullOrBlank()) {
@@ -108,12 +127,12 @@ fun Paso05DisciplinaActividad(onValidity: (Boolean) -> Unit) {
                 if (!cargando && disciplinaIdSeleccionada != null && actividades.isEmpty()) {
                     Text("Sin actividades para la disciplina seleccionada")
                 }
-                // Botón Recargar
-                androidx.compose.material3.TextButton(onClick = {
-                    scope.launch { DisciplinaActividadService.cargar(context, forzarRecarga = true) }
-                }, enabled = !cargando) {
-                    androidx.compose.material3.Text(if (cargando) "Recargando..." else "Recargar")
-                }
+                // Botón Recargar (texto en negro)
+                TextButton(
+                    onClick = { scope.launch { DisciplinaActividadService.cargar(context, forzarRecarga = true) } },
+                    enabled = !cargando,
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color.Black)
+                ) { androidx.compose.material3.Text(if (cargando) "Recargando..." else "Recargar") }
             }
         }
     }

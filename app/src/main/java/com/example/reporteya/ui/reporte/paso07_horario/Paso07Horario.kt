@@ -1,6 +1,9 @@
 package com.example.reporteya.ui.reporte.paso07_horario
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
@@ -35,6 +38,7 @@ fun Paso07Horario(onValidity: (Boolean) -> Unit) {
         }, readOnly = true,
             label = { Text("Hora inicio (hh:mm AM/PM)") }, modifier = Modifier.fillMaxWidth())
         Button(onClick = { showPickerInicio = true }) { Text("Seleccionar inicio") }
+        Spacer(Modifier.height(8.dp))
         OutlinedTextField(value = fin, onValueChange = { v ->
             fin = v
             onValidity(validar(inicio, fin))

@@ -33,13 +33,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalContext
+// Removed LocalFocusManager import; not used
 // import org.json.JSONObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.example.reporteya.services.AuthService
 import com.example.reporteya.BuildConfig
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -84,7 +84,7 @@ fun RegistrationEmpleadoView(onRegisteredPendingId: (String) -> Unit = {}) {
         return listOf(codigoErr, dniErr, correoErr, privacidadErr).all { it == null }
     }
 
-    val context = androidx.compose.ui.platform.LocalContext.current
+    // No se usa contexto en esta pantalla; eliminado para evitar warning
 
     fun registrar() {
         if (!validate()) {
@@ -97,7 +97,8 @@ fun RegistrationEmpleadoView(onRegisteredPendingId: (String) -> Unit = {}) {
             try {
                 val base = BuildConfig.INVITE_API_BASE
                 if (base.isBlank()) throw IllegalStateException("INVITE_API_BASE no configurado")
-                val url = URL("$base/api/invite")
+                val endpoint = if (base.contains("/functions")) "$base/invite" else "$base/api/invite"
+                val url = URL(endpoint)
                 val body = JSONObject().apply {
                     put("code", codigo)
                     put("dni", dni)
@@ -117,13 +118,17 @@ fun RegistrationEmpleadoView(onRegisteredPendingId: (String) -> Unit = {}) {
                 conn.disconnect()
                 withContext(Dispatchers.Main) {
                     cargando = false
-                    if (codeResp in 200..299) {
-                        // Navegar a CheckEmailView: marcador vacío
-                        onRegisteredPendingId("")
-                    } else if (codeResp == 429) {
-                        error = "Demasiados intentos. Intenta en unos minutos."
-                    } else {
-                        error = "Datos inválidos o cuenta no habilitada. Inténtalo más tarde."
+                    when (codeResp) {
+                        in 200..299 -> {
+                            // Navegar a CheckEmailView: marcador vacío
+                            onRegisteredPendingId("")
+                        }
+                        429 -> {
+                            error = "Demasiados intentos. Intenta en unos minutos."
+                        }
+                        else -> {
+                            error = "Datos inválidos o cuenta no habilitada. Inténtalo más tarde."
+                        }
                     }
                 }
             } catch (_: Throwable) {
@@ -196,7 +201,7 @@ fun RegistrationEmpleadoView(onRegisteredPendingId: (String) -> Unit = {}) {
             Text("Acepto la Política de Privacidad")
         }
         Spacer(Modifier.height(16.dp))
-        Button(onClick = { registrar() }, enabled = !cargando && aceptoPrivacidad && codigo.isNotBlank() && dni.isNotBlank() && correo.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color.White)) {
+        Button(onClick = { registrar() }, enabled = !cargando && aceptoPrivacidad && codigo.isNotBlank() && dni.isNotBlank() && correo.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = com.example.reporteya.ui.theme.BrandBluePrimary, contentColor = Color.White)) {
             Text(if (cargando) "Cargando…" else "Crear Cuenta")
         }
         if (error != null) {
@@ -223,14 +228,14 @@ fun CheckEmailView(onBackToLogin: () -> Unit = {}) {
     }
 }
 
+@Suppress("unused", "UNUSED_PARAMETER")
 @Composable
-fun OtpEmpleadoView(pendingId: String, onOtpSuccessGoLogin: () -> Unit = {}) {
+fun OtpEmpleadoView(_pendingId: String, onOtpSuccessGoLogin: () -> Unit = {}) {
     var code by remember { mutableStateOf("") }
     var cargando by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var success by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
-    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -293,6 +298,7 @@ fun RecuperarContrasenaView(onSuccessBackToLogin: () -> Unit = {}) {
     var loadingPaso1 by remember { mutableStateOf(false) }
     var errorPaso1 by remember { mutableStateOf<String?>(null) }
     var paso2Habilitado by remember { mutableStateOf(false) }
+    var successPaso1 by remember { mutableStateOf(false) }
 
     // Paso 2
     var nuevaPass by remember { mutableStateOf("") }
@@ -304,13 +310,40 @@ fun RecuperarContrasenaView(onSuccessBackToLogin: () -> Unit = {}) {
     var showPass2 by remember { mutableStateOf(false) }
     var showSuccess by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
+
     fun enviarCodigo() {
         if (correo.isBlank()) { errorPaso1 = "Ingresa tu correo"; return }
         loadingPaso1 = true
         errorPaso1 = null
-        // Simulación local: habilitar paso 2 sin red
-        loadingPaso1 = false
-        paso2Habilitado = true
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val redirect = BuildConfig.PASSWORD_RESET_REDIRECT
+                val res = com.example.reporteya.services.AuthService.recoverPassword(context, correo.trim(), redirect)
+                res.fold(onSuccess = {
+                    loadingPaso1 = false
+                    // En el flujo de Supabase, el usuario recibe un email con enlace; pasamos al paso 2 opcional si deseas aceptar código manual
+                    paso2Habilitado = false
+                    withContext(Dispatchers.Main) {
+                        errorPaso1 = null
+                        successPaso1 = true
+                    }
+                }, onFailure = { e ->
+                    loadingPaso1 = false
+                    withContext(Dispatchers.Main) {
+                        val msg = e.message ?: "No se pudo enviar el correo. Intenta más tarde."
+                        errorPaso1 = if (msg.contains("after") && msg.contains("seconds", ignoreCase = true)) {
+                            // Mensaje de límite: traducir brevemente
+                            "Has solicitado demasiadas veces. ${'$'}msg"
+                        } else msg
+                        successPaso1 = false
+                    }
+                })
+            } catch (_: Throwable) {
+                loadingPaso1 = false
+                withContext(Dispatchers.Main) { errorPaso1 = "Error de red. Intenta de nuevo." }
+            }
+        }
     }
 
     fun confirmarNueva() {
@@ -343,13 +376,20 @@ fun RecuperarContrasenaView(onSuccessBackToLogin: () -> Unit = {}) {
             keyboardActions = KeyboardActions(onSend = { if (!loadingPaso1) enviarCodigo() })
         )
         Spacer(Modifier.height(8.dp))
-        Button(onClick = { enviarCodigo() }, enabled = !loadingPaso1) { Text(if (loadingPaso1) "Enviando…" else "Enviar") }
+        Button(onClick = { enviarCodigo() }, enabled = !loadingPaso1 && !successPaso1) { Text(if (loadingPaso1) "Enviando…" else "Enviar") }
         if (errorPaso1 != null) {
             Spacer(Modifier.height(8.dp))
             Text(errorPaso1!!, color = Color.Red)
         }
 
-        // Paso 2: nueva contraseña + código
+        if (successPaso1) {
+            Spacer(Modifier.height(12.dp))
+            Text("Te enviamos un enlace a tu correo para restablecer la contraseña.")
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = onSuccessBackToLogin) { Text("Volver a iniciar sesión") }
+        }
+
+        // Paso 2 (opcional si usas código interno). Con Supabase reset por enlace, este bloque puede omitirse.
         if (paso2Habilitado) {
             Spacer(Modifier.height(24.dp))
             OutlinedTextField(
@@ -357,7 +397,7 @@ fun RecuperarContrasenaView(onSuccessBackToLogin: () -> Unit = {}) {
                 onValueChange = { nuevaPass = it },
                 label = { Text("Nueva contraseña") },
                 visualTransformation = if (showPass1) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = { TextButton(onClick = { showPass1 = !showPass1 }) { Text(if (showPass1) "Ocultar" else "Mostrar") } },
+                trailingIcon = { TextButton(onClick = { showPass1 = !showPass1 }, colors = ButtonDefaults.textButtonColors(contentColor = Color.Black)) { Text(if (showPass1) "Ocultar" else "Mostrar") } },
                 supportingText = { Text("Mínimo 8 caracteres, incluye 1 mayúscula y 1 número") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next)
             )
@@ -367,7 +407,7 @@ fun RecuperarContrasenaView(onSuccessBackToLogin: () -> Unit = {}) {
                 onValueChange = { repetirPass = it },
                 label = { Text("Repite tu nueva contraseña") },
                 visualTransformation = if (showPass2) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = { TextButton(onClick = { showPass2 = !showPass2 }) { Text(if (showPass2) "Ocultar" else "Mostrar") } },
+                trailingIcon = { TextButton(onClick = { showPass2 = !showPass2 }, colors = ButtonDefaults.textButtonColors(contentColor = Color.Black)) { Text(if (showPass2) "Ocultar" else "Mostrar") } },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next)
             )
             Spacer(Modifier.height(8.dp))

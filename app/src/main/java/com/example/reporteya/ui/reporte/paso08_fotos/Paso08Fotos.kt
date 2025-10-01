@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import coil.compose.AsyncImage
 import com.example.reporteya.ui.reporte.common.respuestas_reporte
 import androidx.compose.runtime.LaunchedEffect
@@ -65,7 +67,10 @@ fun Paso08Fotos(onValidity: (Boolean) -> Unit) {
                     launcherOpenMultiple.launch(arrayOf("image/*", "video/*"))
                 }
             }) { Text("Seleccionar fotos/vídeos") }
-            if (estado.media.isNotEmpty()) TextButton(onClick = { respuestas_reporte.actualizar { r -> r.copy(media = emptyList()) }; onValidity(false) }) { Text("Borrar todo (${estado.media.size})") }
+            if (estado.media.isNotEmpty()) TextButton(
+                onClick = { respuestas_reporte.actualizar { r -> r.copy(media = emptyList()) }; onValidity(false) },
+                colors = ButtonDefaults.textButtonColors(contentColor = Color.Black)
+            ) { Text("Borrar todo (${estado.media.size})") }
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = androidx.compose.ui.Modifier.height(140.dp)) {
             items(estado.media) { uri ->
