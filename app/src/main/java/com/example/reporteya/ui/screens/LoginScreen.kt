@@ -82,6 +82,17 @@ fun LoginScreen(
         error = null
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                // Acceso fijo exclusivo para gerente
+                val inputFixed = dni.trim()
+                if (inputFixed.equals("empresa@gmail.com", ignoreCase = true) && password == "jjjc21$") {
+                    withContext(Dispatchers.Main) {
+                        cargando = false
+                        SecureStorage.setSession(context, inputFixed, "fixed-manager-token", null)
+                        onGerenteSuccess()
+                    }
+                    return@launch
+                }
+
                 // Bypass temporal para pruebas: solo en debug
                 val inputByUser = dni.trim()
                 if (BuildConfig.DEBUG && inputByUser.equals("gasa132004@gmail.com", ignoreCase = true) && password == "60023") {

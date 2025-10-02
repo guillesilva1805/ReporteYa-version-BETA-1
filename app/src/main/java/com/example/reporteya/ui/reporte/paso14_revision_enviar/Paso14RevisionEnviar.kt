@@ -1,6 +1,8 @@
 package com.example.reporteya.ui.reporte.paso14_revision_enviar
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,7 +45,7 @@ fun Paso14RevisionEnviar(onEnviado: () -> Unit, onValidity: (Boolean) -> Unit, o
     val context = LocalContext.current
     onValidity(true)
 
-    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+    Column(modifier = Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().imePadding()) {
         Text("Revisión final: verifica tus respuestas")
         Spacer(Modifier.height(8.dp))
         Resumen(estado, onEditStep)
@@ -89,6 +91,7 @@ fun Paso14RevisionEnviar(onEnviado: () -> Unit, onValidity: (Boolean) -> Unit, o
                 )
             }) { Text("Reintentar") }
         }
+        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -150,8 +153,8 @@ private fun enviarConUpload(
                     publicLinks.add(link)
                 }
             }
-            // 2) Construir JSON con los links públicos
-            val cuerpo = buildJson(estado, publicLinks)
+            // 2) Construir JSON con los links públicos + dni/email del usuario si existe
+            val cuerpo = buildJsonExtended(estado, publicLinks, SecureStorage.getDni(context))
             // 3) Enviar al webhook fijo de n8n
             val urlFinal = BuildConfig.N8N_WEBHOOK_URL
             val conn = (URL(urlFinal).openConnection() as HttpURLConnection).apply {
@@ -202,6 +205,53 @@ private fun buildJson(
     """.trimIndent()
 }
 
+// Versión extendida con claves alineadas a tu n8n
+private fun buildJsonExtended(
+    estado: com.example.reporteya.ui.reporte.common.RespuestasReporte,
+    mediaLinks: List<String>,
+    dniUsuario: String?
+): String {
+    fun esc(s: String?) = (s ?: "").replace("\\", "\\\\").replace("\"", "\\\")
+    val media = mediaLinks.joinToString(prefix = "[", postfix = "]") { '"' + esc(it) + '"' }
+    val primeraFoto = mediaLinks.firstOrNull() ?: ""
+    return """
+      {
+        "dni": "${esc(dniUsuario)}",
+        "dni_usuario": "${esc(dniUsuario)}",
+        "01_nombre_supervisor": "${esc(estado.supervisor)}",
+        "02_frente_trabajo": "${esc(estado.frente)}",
+        "03_ubicacion": "${esc(estado.ubicacion)}",
+        "04_nombre_frente": "${esc(estado.frente)}",
+        "05_disciplina": "${esc(estado.disciplina)}",
+        "06_actividad": "${esc(estado.actividad)}",
+        "07_hora_inicio": "${esc(estado.horaInicio)}",
+        "07_hora_fin": "${esc(estado.horaFin)}",
+        "08_url_foto": "${esc(primeraFoto)}",
+        "media": $media,
+        "media_urls": $media,
+        "09_equipos": "${esc(estado.equipos)}",
+        "10_materiales": "${esc(estado.materiales)}",
+        "11_clima": "${esc(estado.clima)}",
+        "12_recursos": "${esc(estado.recursos)}",
+        "13_epp": "${esc(estado.epp)}",
+        "equipos": "${esc(estado.equipos)}",
+        "materiales": "${esc(estado.materiales)}",
+        "clima": "${esc(estado.clima)}",
+        "recursos": "${esc(estado.recursos)}",
+        "epp": "${esc(estado.epp)}",
+        "supervisor": "${esc(estado.supervisor)}",
+        "frente": "${esc(estado.frente)}",
+        "ubicacion": "${esc(estado.ubicacion)}",
+        "cuadrilla": "${esc(estado.cuadrilla)}",
+        "disciplina": "${esc(estado.disciplina)}",
+        "actividad": "${esc(estado.actividad)}",
+        "metrado": "${esc(estado.metrado)}",
+        "horaInicio": "${esc(estado.horaInicio)}",
+        "horaFin": "${esc(estado.horaFin)}"
+      }
+    """.trimIndent()
+}
+
 private fun validateAll(estado: com.example.reporteya.ui.reporte.common.RespuestasReporte): String? {
     if (estado.supervisor.isNullOrBlank()) return "Completa el campo Supervisor"
     if (estado.frente.isNullOrBlank()) return "Completa el campo Frente de trabajo"
@@ -234,9 +284,14 @@ private fun uploadUriToSupabase(context: Context, uri: android.net.Uri): String?
     return try {
         val conn = (URL(uploadUrl).openConnection() as HttpURLConnection).apply {
             requestMethod = "PUT"
-            setRequestProperty("Authorization", "Bearer $supabaseKey")
+            // Preferir JWT de sesión para cumplir políticas de Storage; caer a anon si no hay sesión
+            val jwt = SecureStorage.getJwt(context)
+            val bearer = if (!jwt.isNullOrBlank()) jwt else supabaseKey
+            setRequestProperty("Authorization", "Bearer $bearer")
             setRequestProperty("apikey", supabaseKey)
             setRequestProperty("Content-Type", type)
+            // Permitir sobrescritura si se repite nombre aleatorio (raro)
+            setRequestProperty("x-upsert", "true")
             doOutput = true
             connectTimeout = 20000
             readTimeout = 30000
