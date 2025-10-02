@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION")
 package com.example.reporteya.services
 
 import android.content.Context

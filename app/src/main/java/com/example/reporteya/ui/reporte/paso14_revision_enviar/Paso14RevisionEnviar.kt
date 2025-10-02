@@ -211,7 +211,7 @@ private fun buildJsonExtended(
     mediaLinks: List<String>,
     dniUsuario: String?
 ): String {
-    fun esc(s: String?) = (s ?: "").replace("\\", "\\\\").replace("\"", "\\\")
+    fun esc(s: String?) = (s ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
     val media = mediaLinks.joinToString(prefix = "[", postfix = "]") { '"' + esc(it) + '"' }
     val primeraFoto = mediaLinks.firstOrNull() ?: ""
     return """
